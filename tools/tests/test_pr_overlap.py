@@ -15,6 +15,44 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pr_overlap
 
 
+class FetchRetryTests(unittest.TestCase):
+    def test_retries_interrupted_fetch_without_losing_heads(self):
+        failure = subprocess.CalledProcessError(128, ["git", "fetch"], stderr="fatal: early EOF")
+        prs = {1: {"sha": "head"}}
+        with patch.object(pr_overlap, "REPO", "owner/project", create=True), \
+                patch.object(pr_overlap, "git", side_effect=[failure, ""]) as git, \
+                patch.object(pr_overlap.time, "sleep") as sleep:
+            self.assertEqual(pr_overlap.fetch_heads("base", prs), "base")
+        self.assertEqual(git.call_count, 2)
+        self.assertEqual(git.call_args_list[0], git.call_args_list[1])
+        sleep.assert_called_once_with(0.5)
+        self.assertEqual(prs[1]["ref"], "head")
+
+    def test_permanent_failure_is_not_retried(self):
+        failure = subprocess.CalledProcessError(128, ["git", "fetch"], stderr="fatal: bad object")
+        prs = {1: {"sha": "head"}}
+        with patch.object(pr_overlap, "REPO", "owner/project", create=True), \
+                patch.object(pr_overlap, "git", side_effect=failure) as git, \
+                patch.object(pr_overlap.time, "sleep") as sleep:
+            with self.assertRaises(subprocess.CalledProcessError):
+                pr_overlap.fetch_heads("base", prs)
+        self.assertEqual(git.call_count, 1)
+        sleep.assert_not_called()
+        self.assertNotIn("ref", prs[1])
+
+    def test_repeated_interruption_fails_after_three_attempts(self):
+        failure = subprocess.CalledProcessError(128, ["git", "fetch"], stderr="error: RPC failed")
+        prs = {1: {"sha": "head"}}
+        with patch.object(pr_overlap, "REPO", "owner/project", create=True), \
+                patch.object(pr_overlap, "git", side_effect=failure) as git, \
+                patch.object(pr_overlap.time, "sleep") as sleep:
+            with self.assertRaises(subprocess.CalledProcessError):
+                pr_overlap.fetch_heads("base", prs)
+        self.assertEqual(git.call_count, 3)
+        self.assertEqual([call.args for call in sleep.call_args_list], [(0.5,), (1.0,)])
+        self.assertNotIn("ref", prs[1])
+
+
 class OpenPullRequestsTests(unittest.TestCase):
     def test_collects_pull_requests_beyond_the_previous_limit(self):
         pull_requests = [

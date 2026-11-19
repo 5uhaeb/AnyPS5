@@ -247,7 +247,20 @@ def fetch_heads(base_sha, prs):
     remote = f"https://github.com/{REPO}.git"
     commits = [base_sha] + [pr["sha"] for pr in prs.values()]
     for start in range(0, len(commits), FETCH_REFS):
-        git("fetch", "--no-write-fetch-head", "--no-tags", "-q", remote, *commits[start:start + FETCH_REFS])
+        for attempt in range(3):
+            try:
+                git("fetch", "--no-write-fetch-head", "--no-tags", "-q", remote, *commits[start:start + FETCH_REFS])
+                break
+            except subprocess.CalledProcessError as error:
+                message = (error.stderr or "").lower()
+                transient = any(reason in message for reason in (
+                    "rpc failed", "unexpected disconnect", "early eof",
+                    "connection reset", "timed out", "the remote end hung up unexpectedly",
+                ))
+                if attempt == 2 or not transient:
+                    raise
+                progress(f"fetch interrupted; retrying batch ({attempt + 1}/2)")
+                time.sleep(0.5 * 2 ** attempt)
         progress(f"fetched {min(start + FETCH_REFS, len(commits)) - 1}/{len(prs)} pull request heads")
     for pr in prs.values():
         pr["ref"] = pr["sha"]
