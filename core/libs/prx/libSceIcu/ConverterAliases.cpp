@@ -122,3 +122,7 @@ extern "C" const char* APS5_VABI ucnv_getAlias_nid_postfix(const char* alias, st
     if (finalStatus != initial && !CopyOut(error, &finalStatus, sizeof(finalStatus))) APS5_INVALID_ARG_EX;
     return result;
 }
+
+extern "C" int APS5_VABI ucnv_flushCache_nid_postfix() {
+    return ucnv_flushCache();
+}
