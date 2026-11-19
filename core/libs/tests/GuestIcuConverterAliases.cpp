@@ -95,6 +95,8 @@ void CheckParity(const char* alias, std::int32_t initial) {
 }
 
 void Parity() {
+    Require(ucnv_flushCache_nid_postfix() >= 0, "converter cache flush returns a nonnegative count");
+    Require(ucnv_flushCache_nid_postfix() == ucnv_flushCache(), "empty converter cache matches pinned ICU");
     static_assert(std::is_same_v<decltype(&ucnv_getAliases_nid_postfix),
                   void (APS5_VABI*)(const char*, const char**, std::int32_t*)>);
     const std::string shortLimit(UCNV_MAX_CONVERTER_NAME_LENGTH - 1, 'a');
