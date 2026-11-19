@@ -66,6 +66,9 @@ std::string CheckedString(const char* source) {
 void CheckParity(const char* alias, std::int32_t initial) {
     UErrorCode nativeStatus = static_cast<UErrorCode>(initial);
     const auto count = ucnv_countAliases(alias, &nativeStatus);
+    std::int32_t countStatus = initial;
+    Require(ucnv_countAliases_nid_postfix(alias, &countStatus) == count, "count matches pinned ICU");
+    Require(countStatus == static_cast<std::int32_t>(nativeStatus), "count status matches pinned ICU");
     std::vector<const char*> expected(count);
     if (U_SUCCESS(nativeStatus) && count != 0) ucnv_getAliases(alias, expected.data(), &nativeStatus);
 
@@ -133,6 +136,10 @@ void GuestPointers() {
 
     RequireInvalidArgument([&] { ucnv_getAliases_nid_postfix(invalidAlias, invalidOutput, nullptr); },
                            "null status throws before other pointers are read");
+    RequireInvalidArgument([&] { ucnv_countAliases_nid_postfix(invalidAlias, nullptr); },
+                           "count rejects null status");
+    Require(ucnv_countAliases_nid_postfix(invalidAlias, readOnlyFailure) == 0 && *readOnlyFailure == failure,
+            "count leaves a failed status untouched and skips the alias read");
     RequireRuntimeError([&] { ucnv_getAliases_nid_postfix("UTF-8", nullptr, invalidStatus); },
                         "unreadable status throws");
     ucnv_getAliases_nid_postfix(invalidAlias, invalidOutput, readOnlyFailure);

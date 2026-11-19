@@ -7461,10 +7461,6 @@ int APS5_VABI sceIcuLegacyUnknown_kvdoVHFQSYk_nid_no_patch() {
 }
 APS5_EXPORT("kvdoVHFQSYk", sceIcuLegacyUnknown_kvdoVHFQSYk_nid_no_patch);
 
-int APS5_VABI ucnv_countAliases_nid_postfix() {
-    NotImplemented_nid_no_patch(__func__);
-}
-
 int APS5_VABI sceIcuLegacyUnknown_l06yCeuTh9o_nid_no_patch() {
     NotImplemented_nid_no_patch(__func__);
 }

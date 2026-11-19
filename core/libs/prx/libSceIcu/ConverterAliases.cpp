@@ -34,16 +34,14 @@ bool Writable(void* destination, std::size_t bytes) {
     return GuestWritable_nid_no_patch(destination, bytes);
 }
 
-std::string ReadAlias(const char* alias, const char* caller) {
-    std::string copy;
+bool ReadAlias(const char* alias, std::string& copy, std::size_t limit) {
     auto address = reinterpret_cast<std::uintptr_t>(alias);
     for (;;) {
         char value = 0;
-        if (!CopyIn(&value, reinterpret_cast<const void*>(address), sizeof(value)))
-            NotImplemented_nid_no_patch(caller);
-        if (value == 0) return copy;
-        if (copy.size() < UCNV_MAX_CONVERTER_NAME_LENGTH) copy.push_back(value);
-        if (address == std::numeric_limits<std::uintptr_t>::max()) NotImplemented_nid_no_patch(caller);
+        if (!CopyIn(&value, reinterpret_cast<const void*>(address), sizeof(value))) return false;
+        if (value == 0) return true;
+        if (copy.size() < limit) copy.push_back(value);
+        if (address == std::numeric_limits<std::uintptr_t>::max()) return false;
         ++address;
     }
 }
@@ -73,7 +71,7 @@ extern "C" void APS5_VABI ucnv_getAliases_nid_postfix(const char* alias, const c
     std::string aliasCopy;
     const char* nativeAlias = nullptr;
     if (alias) {
-        aliasCopy = ReadAlias(alias, __func__);
+        if (!ReadAlias(alias, aliasCopy, UCNV_MAX_CONVERTER_NAME_LENGTH)) NotImplemented_nid_no_patch(__func__);
         nativeAlias = aliasCopy.c_str();
     }
     const auto count = ucnv_countAliases(nativeAlias, &status);
@@ -87,4 +85,22 @@ extern "C" void APS5_VABI ucnv_getAliases_nid_postfix(const char* alias, const c
     ucnv_getAliases(nativeAlias, nativeAliases.data(), &status);
     if (!CopyOut(aliases, nativeAliases.data(), bytes)) NotImplemented_nid_no_patch(__func__);
     WriteStatus(error, status, initial, __func__);
+}
+
+extern "C" std::uint16_t APS5_VABI ucnv_countAliases_nid_postfix(const char* alias, std::int32_t* error) {
+    std::int32_t initial = 0;
+    if (!CopyIn(&initial, error, sizeof(initial))) APS5_INVALID_ARG_EX;
+    auto status = static_cast<UErrorCode>(initial);
+    if (U_FAILURE(status)) return 0;
+
+    ucnv_countAliases("", &status);
+    std::uint16_t count = 0;
+    if (U_SUCCESS(status)) {
+        std::string aliasCopy;
+        if (alias && !ReadAlias(alias, aliasCopy, aliasCopy.max_size())) APS5_INVALID_ARG_EX;
+        count = ucnv_countAliases(alias ? aliasCopy.c_str() : nullptr, &status);
+    }
+    const auto result = static_cast<std::int32_t>(status);
+    if (result != initial && !CopyOut(error, &result, sizeof(result))) APS5_INVALID_ARG_EX;
+    return count;
 }

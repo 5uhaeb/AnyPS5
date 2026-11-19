@@ -1722,7 +1722,7 @@ int APS5_VABI sceIcuLegacyUnknown_krY8IJeESWM_nid_no_patch();
 int APS5_VABI ucnv_isAmbiguous_nid_postfix();
 int APS5_VABI _ZN6icu_686UStackC2EPFvPvEPFa8UElementS4_EiR10UErrorCode_nid_postfix();
 int APS5_VABI sceIcuLegacyUnknown_kvdoVHFQSYk_nid_no_patch();
-int APS5_VABI ucnv_countAliases_nid_postfix();
+std::uint16_t APS5_VABI ucnv_countAliases_nid_postfix(const char* alias, std::int32_t* error);
 int APS5_VABI sceIcuLegacyUnknown_l06yCeuTh9o_nid_no_patch();
 int APS5_VABI _ZN6icu_6810CharString15getAppendBufferEiiRiR10UErrorCode_nid_postfix();
 int APS5_VABI uhash_setKeyHasher_nid_postfix();
