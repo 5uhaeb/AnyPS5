@@ -104,3 +104,21 @@ extern "C" std::uint16_t APS5_VABI ucnv_countAliases_nid_postfix(const char* ali
     if (result != initial && !CopyOut(error, &result, sizeof(result))) APS5_INVALID_ARG_EX;
     return count;
 }
+
+extern "C" const char* APS5_VABI ucnv_getAlias_nid_postfix(const char* alias, std::uint16_t index, std::int32_t* error) {
+    std::int32_t initial = 0;
+    if (!CopyIn(&initial, error, sizeof(initial))) APS5_INVALID_ARG_EX;
+    auto status = static_cast<UErrorCode>(initial);
+    if (U_FAILURE(status)) return nullptr;
+
+    ucnv_countAliases("", &status);
+    const char* result = nullptr;
+    if (U_SUCCESS(status)) {
+        std::string aliasCopy;
+        if (alias && !ReadAlias(alias, aliasCopy, aliasCopy.max_size())) APS5_INVALID_ARG_EX;
+        result = ucnv_getAlias(alias ? aliasCopy.c_str() : nullptr, index, &status);
+    }
+    const auto finalStatus = static_cast<std::int32_t>(status);
+    if (finalStatus != initial && !CopyOut(error, &finalStatus, sizeof(finalStatus))) APS5_INVALID_ARG_EX;
+    return result;
+}

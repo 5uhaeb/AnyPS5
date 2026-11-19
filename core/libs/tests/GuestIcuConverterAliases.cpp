@@ -69,6 +69,15 @@ void CheckParity(const char* alias, std::int32_t initial) {
     std::int32_t countStatus = initial;
     Require(ucnv_countAliases_nid_postfix(alias, &countStatus) == count, "count matches pinned ICU");
     Require(countStatus == static_cast<std::int32_t>(nativeStatus), "count status matches pinned ICU");
+    for (const std::uint16_t index : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{65535}}) {
+        UErrorCode expectedStatus = static_cast<UErrorCode>(initial);
+        const char* expectedAlias = ucnv_getAlias(alias, index, &expectedStatus);
+        std::int32_t actualStatus = initial;
+        const char* actualAlias = ucnv_getAlias_nid_postfix(alias, index, &actualStatus);
+        Require(actualStatus == static_cast<std::int32_t>(expectedStatus), "single alias status matches pinned ICU");
+        Require((actualAlias == nullptr) == (expectedAlias == nullptr), "single alias presence matches pinned ICU");
+        if (actualAlias) Require(CheckedString(actualAlias) == expectedAlias, "single alias matches pinned ICU");
+    }
     std::vector<const char*> expected(count);
     if (U_SUCCESS(nativeStatus) && count != 0) ucnv_getAliases(alias, expected.data(), &nativeStatus);
 
