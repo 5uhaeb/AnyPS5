@@ -147,6 +147,10 @@ static void CheckBlobBoundaries(const Api& api) {
     try { api.blob(nullptr, 1, HB_MEMORY_MODE_DUPLICATE, &owner, Destroy); }
     catch (const std::exception&) { threw = true; }
     Require(threw && owner.destroyed == 0);
+    threw = false;
+    try { api.blob(reinterpret_cast<const char*>(static_cast<std::uintptr_t>(1)), 1, HB_MEMORY_MODE_DUPLICATE, &owner, Destroy); }
+    catch (const std::exception&) { threw = true; }
+    Require(threw && owner.destroyed == 0);
 }
 
 struct FaceState {

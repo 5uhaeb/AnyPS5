@@ -1,0 +1,5 @@
+# libharfbuzz
+
+## change [Blob and face lifecycle]
+
+- [Blob and face lifecycle](../../../core/libs/prx/libharfbuzz/Lifecycle.cpp): Console ABI, HarfBuzz version, object layouts and allocation failures are unverified. The three exports follow pinned [HarfBuzz 10.0.1](https://github.com/harfbuzz/harfbuzz/tree/a1d9bfe62818ef0fa9cf63b6e6d51436b1c93cbc), including immediate data destruction for copied, empty or oversized blobs and final-reference destruction for borrowed blobs and faces. Table and destruction callbacks cross through guest System V bridges. Backend-owned objects cannot be mixed with foreign HarfBuzz layouts. Bridge allocation failures throw `std::bad_alloc`; unsupported memory modes, null data for nonzero lengths below 2 GiB and inaccessible duplicate-mode input throw before taking caller ownership. Other inaccessible pointers and callbacks are not validated, and source memory for borrowed blobs must remain valid until the backend releases it. No console or title execution was performed.

@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <type_traits>
+#include <vector>
 
 static_assert(sizeof(hb_memory_mode_t) == sizeof(std::uint32_t));
 static_assert(std::is_same_v<hb_tag_t, std::uint32_t>);
@@ -45,6 +46,12 @@ extern "C" {
 
 hb_blob_t* APS5_VABI hb_blob_create_nid_postfix(const char* data, unsigned length, std::uint32_t mode, void* userData, HarfBuzz::Destroy destroy) {
     if (mode > HB_MEMORY_MODE_READONLY_MAY_MAKE_WRITABLE || (!data && length && length < (1u << 31))) NotImplemented_nid_no_patch(__func__);
+    std::vector<char> copiedData;
+    if (mode == HB_MEMORY_MODE_DUPLICATE && length && length < (1u << 31)) {
+        copiedData.resize(length);
+        if (!GuestCopyIn_nid_no_patch(copiedData.data(), data, length)) NotImplemented_nid_no_patch(__func__);
+        data = copiedData.data();
+    }
     if (!destroy) return hb_blob_create(data, length, static_cast<hb_memory_mode_t>(mode), userData, nullptr);
     auto owner = std::make_unique<DestroyData>(userData, destroy);
     return hb_blob_create(data, length, static_cast<hb_memory_mode_t>(mode), owner.release(), DestroyUserData);
