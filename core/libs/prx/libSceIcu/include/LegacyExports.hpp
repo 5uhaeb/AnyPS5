@@ -756,7 +756,7 @@ int APS5_VABI _ZN6icu_6815ServiceListenerD2Ev_nid_postfix();
 int APS5_VABI _ZN6icu_6813UnicodeString4copyEiii_nid_postfix();
 int APS5_VABI sceIcuLegacyUnknown_IgQF_plus_ZfzGuE_nid_no_patch();
 int APS5_VABI _ZN6icu_6810CharStringaSEOS0__nid_postfix();
-int APS5_VABI ucnv_getAlias_nid_postfix();
+const char* APS5_VABI ucnv_getAlias_nid_postfix(const char* alias, std::uint16_t index, std::int32_t* error);
 int APS5_VABI _ZN6icu_6822RuleBasedBreakIterator22getLanguageBreakEngineEi_nid_postfix();
 int APS5_VABI sceIcuLegacyUnknown_IujaBegS7U8_nid_no_patch();
 int APS5_VABI sceIcuLegacyUnknown_Iv2gq6GySGc_nid_no_patch();
