@@ -4861,10 +4861,6 @@ int APS5_VABI sceIcuLegacyUnknown_TZ96eGr55CM_nid_no_patch() {
 }
 APS5_EXPORT("TZ96eGr55CM", sceIcuLegacyUnknown_TZ96eGr55CM_nid_no_patch);
 
-int APS5_VABI ucnv_flushCache_nid_postfix() {
-    NotImplemented_nid_no_patch(__func__);
-}
-
 int APS5_VABI sceIcuLegacyUnknown_TbVO1SJy7vQ_nid_no_patch() {
     NotImplemented_nid_no_patch(__func__);
 }
