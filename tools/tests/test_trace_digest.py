@@ -64,6 +64,26 @@ def excessive_trace_json(opening, closing):
     raise AssertionError("JSON decoder accepted every bounded nesting probe")
 
 
+class TraceDuplicateFieldsTests(unittest.TestCase):
+    def test_rejects_duplicate_fields_in_plain_and_gzip_traces(self):
+        traces = (
+            ('{"traceEvents":[],"traceEvents":[]}', "traceEvents"),
+            ('[{"ph":"X","name":"work","tid":1,"ts":0,"dur":1,"dur":2}]', "dur"),
+            ('[{"ph":"C","tid":1,"ts":0,"args":{"ms":1,"ms":2}}]', "ms"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            for suffix in (".json", ".json.gz"):
+                path = Path(directory) / ("trace" + suffix)
+                for text, field in traces:
+                    with self.subTest(suffix=suffix, field=field):
+                        opener = gzip.open if suffix.endswith(".gz") else open
+                        with opener(path, "wt", encoding="utf-8") as output:
+                            output.write(text)
+                        with self.assertRaises(ValueError) as raised:
+                            trace_digest.load_trace(path)
+                        self.assertEqual(str(raised.exception), f"{path}: duplicate JSON field: {field!r}")
+
+
 class TraceWaitAncestryTests(unittest.TestCase):
     def test_digest_classifies_each_slice_once(self):
         events = [complete(1, "Worker.wait" if index % 3 == 0 else "work",
