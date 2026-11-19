@@ -126,3 +126,13 @@ extern "C" const char* APS5_VABI ucnv_getAlias_nid_postfix(const char* alias, st
 extern "C" int APS5_VABI ucnv_flushCache_nid_postfix() {
     return ucnv_flushCache();
 }
+
+extern "C" const char* APS5_VABI ucnv_getDefaultName_nid_postfix() {
+    return ucnv_getDefaultName();
+}
+
+extern "C" void APS5_VABI ucnv_setDefaultName_nid_postfix(const char* name) {
+    std::string copy;
+    if (name && !ReadAlias(name, copy, copy.max_size())) APS5_INVALID_ARG_EX;
+    ucnv_setDefaultName(name ? copy.c_str() : nullptr);
+}

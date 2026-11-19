@@ -95,6 +95,11 @@ void CheckParity(const char* alias, std::int32_t initial) {
 }
 
 void Parity() {
+    const std::string savedDefault = ucnv_getDefaultName();
+    Require(CheckedString(ucnv_getDefaultName_nid_postfix()) == savedDefault, "default converter matches pinned ICU");
+    ucnv_setDefaultName_nid_postfix("UTF-8");
+    Require(CheckedString(ucnv_getDefaultName_nid_postfix()) == ucnv_getDefaultName(), "default converter setter shares the ICU backend");
+    ucnv_setDefaultName_nid_postfix(savedDefault.c_str());
     Require(ucnv_flushCache_nid_postfix() >= 0, "converter cache flush returns a nonnegative count");
     Require(ucnv_flushCache_nid_postfix() == ucnv_flushCache(), "empty converter cache matches pinned ICU");
     static_assert(std::is_same_v<decltype(&ucnv_getAliases_nid_postfix),
@@ -145,6 +150,8 @@ void GuestPointers() {
     const auto* invalidAlias = reinterpret_cast<const char*>(std::uintptr_t{0x10});
     auto** invalidOutput = reinterpret_cast<const char**>(std::uintptr_t{0x10});
 
+    RequireInvalidArgument([&] { ucnv_setDefaultName_nid_postfix(invalidAlias); },
+                           "default converter setter rejects unreadable names");
     RequireInvalidArgument([&] { ucnv_getAliases_nid_postfix(invalidAlias, invalidOutput, nullptr); },
                            "null status throws before other pointers are read");
     RequireInvalidArgument([&] { ucnv_countAliases_nid_postfix(invalidAlias, nullptr); },
