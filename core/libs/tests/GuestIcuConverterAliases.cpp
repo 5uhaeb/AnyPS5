@@ -96,10 +96,13 @@ void CheckParity(const char* alias, std::int32_t initial) {
 
 void Parity() {
     const std::string savedDefault = ucnv_getDefaultName();
-    Require(CheckedString(ucnv_getDefaultName_nid_postfix()) == savedDefault, "default converter matches pinned ICU");
+    const std::string savedGuestDefault = CheckedString(ucnv_getDefaultName_nid_postfix());
+    Require(savedGuestDefault == savedDefault, "default converter matches pinned ICU");
+    ucnv_setDefaultName("UTF-8");
     ucnv_setDefaultName_nid_postfix("UTF-8");
-    Require(CheckedString(ucnv_getDefaultName_nid_postfix()) == ucnv_getDefaultName(), "default converter setter shares the ICU backend");
-    ucnv_setDefaultName_nid_postfix(savedDefault.c_str());
+    Require(CheckedString(ucnv_getDefaultName_nid_postfix()) == ucnv_getDefaultName(), "default converter setter matches pinned ICU");
+    ucnv_setDefaultName_nid_postfix(savedGuestDefault.c_str());
+    ucnv_setDefaultName(savedDefault.c_str());
     Require(ucnv_flushCache_nid_postfix() >= 0, "converter cache flush returns a nonnegative count");
     Require(ucnv_flushCache_nid_postfix() == ucnv_flushCache(), "empty converter cache matches pinned ICU");
     static_assert(std::is_same_v<decltype(&ucnv_getAliases_nid_postfix),
