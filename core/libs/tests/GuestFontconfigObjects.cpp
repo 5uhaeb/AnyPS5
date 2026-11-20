@@ -471,7 +471,91 @@ static void GuestPointerChecks() {
     FcPatternDestroy_nid_postfix(pattern);
 }
 
+static void GuestInputStrings() {
+    std::size_t pageSize = 0;
+    char* pages = nullptr;
+#ifdef _WIN32
+    SYSTEM_INFO info{};
+    GetSystemInfo(&info);
+    pageSize = info.dwPageSize;
+    pages = static_cast<char*>(VirtualAlloc(nullptr, pageSize * 2, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+    CHECK(pages != nullptr);
+    DWORD previous = 0;
+    CHECK(VirtualProtect(pages + pageSize, pageSize, PAGE_NOACCESS, &previous) != 0);
+#else
+    const long size = sysconf(_SC_PAGESIZE);
+    CHECK(size > 0);
+    pageSize = static_cast<std::size_t>(size);
+    pages = static_cast<char*>(mmap(nullptr, pageSize * 2, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+    CHECK(pages != MAP_FAILED);
+    CHECK(mprotect(pages + pageSize, pageSize, PROT_NONE) == 0);
+#endif
+    auto* pattern = FcPatternCreate();
+    auto* languages = FcLangSetCreate();
+    auto* charset = FcCharSetCreate();
+    CHECK(pattern && languages && charset);
+    const auto* inaccessible = pages + pageSize;
+    const FcMatrix matrix{1, 0, 0, 1};
+    EXPECT_REJECTED(FcPatternAddInteger_nid_postfix(pattern, inaccessible, 80));
+    EXPECT_REJECTED(FcPatternAddBool_nid_postfix(pattern, inaccessible, 1));
+    EXPECT_REJECTED(FcPatternAddDouble(pattern, inaccessible, 12.5));
+    EXPECT_REJECTED(FcPatternAddString(pattern, inaccessible, Text("Example")));
+    EXPECT_REJECTED(FcPatternAddMatrix(pattern, inaccessible, &matrix));
+    EXPECT_REJECTED(FcPatternAddCharSet(pattern, inaccessible, charset));
+    EXPECT_REJECTED(FcPatternAddLangSet(pattern, inaccessible, languages));
+    EXPECT_REJECTED(FcPatternAddString(pattern, "family", Text(inaccessible)));
+    EXPECT_REJECTED(FcLangSetAdd(languages, Text(inaccessible)));
+    EXPECT_REJECTED(FcLangSetHasLang(languages, Text(inaccessible)));
+    EXPECT_REJECTED(FcPatternReference(nullptr));
+    EXPECT_REJECTED(FcPatternAddInteger_nid_postfix(nullptr, "weight", 80));
+    EXPECT_REJECTED(FcPatternAddBool_nid_postfix(nullptr, "antialias", 1));
+    EXPECT_REJECTED(FcPatternAddDouble(nullptr, "size", 12.5));
+    EXPECT_REJECTED(FcPatternAddString(nullptr, "family", Text("Example")));
+    EXPECT_REJECTED(FcPatternAddMatrix(nullptr, "matrix", &matrix));
+    EXPECT_REJECTED(FcPatternAddCharSet(nullptr, "charset", charset));
+    EXPECT_REJECTED(FcPatternAddLangSet(nullptr, "lang", languages));
+    EXPECT_REJECTED(FcLangSetAdd(nullptr, Text("en")));
+    EXPECT_REJECTED(FcLangSetHasLang(nullptr, Text("en")));
+    std::memcpy(pages + pageSize - 3, "en", 3);
+    CHECK(FcLangSetAdd(languages, Text(pages + pageSize - 3)));
+    CHECK(FcLangSetHasLang(languages, Text(pages + pageSize - 3)) == FcLangEqual);
+    int index = 0;
+    for (const auto length : {std::size_t{0}, std::size_t{1}, std::size_t{255}, std::size_t{256}, std::size_t{257}, pageSize - 1}) {
+        std::memset(pages, 'x', pageSize - 1);
+        pages[pageSize - 1] = 0;
+        const auto* text = pages + pageSize - length - 1;
+        errno = 71;
+        CHECK(FcPatternAddString(pattern, "family", Text(text)) && errno == 71);
+        FcChar8* stored = nullptr;
+        CHECK(FcPatternGetString_nid_postfix(pattern, "family", index++, &stored) == FcResultMatch);
+        CHECK(std::strlen(reinterpret_cast<const char*>(stored)) == length);
+        CHECK(FcPatternAddInteger_nid_postfix(pattern, text, 37));
+        int value = 0;
+        CHECK(FcPatternGetInteger_nid_postfix(pattern, text, 0, &value) == FcResultMatch && value == 37);
+    }
+    std::memset(pages, 'x', pageSize);
+    EXPECT_REJECTED(FcPatternAddString(pattern, "family", Text(pages)));
+    EXPECT_REJECTED(FcPatternAddInteger_nid_postfix(pattern, pages, 80));
+    EXPECT_REJECTED(FcLangSetAdd(languages, Text(pages)));
+    EXPECT_REJECTED(FcLangSetHasLang(languages, Text(pages)));
+    FcChar8* unchanged = nullptr;
+    CHECK(FcPatternGetString_nid_postfix(pattern, "family", 6, &unchanged) == FcResultNoId);
+    CHECK(FcLangSetHasLang(languages, Text("en")) == FcLangEqual);
+    FcPatternReference(pattern);
+    FcPatternDestroy_nid_postfix(pattern);
+    CHECK(FcPatternAddInteger_nid_postfix(pattern, "weight", 80));
+    FcPatternDestroy_nid_postfix(pattern);
+    FcLangSetDestroy(languages);
+    FcCharSetDestroy(charset);
+#ifdef _WIN32
+    CHECK(VirtualFree(pages, 0, MEM_RELEASE) != 0);
+#else
+    CHECK(munmap(pages, pageSize * 2) == 0);
+#endif
+}
+
 int main() {
+    GuestInputStrings();
     CharSetValues();
     LangSetValues();
     PatternFiltering();
