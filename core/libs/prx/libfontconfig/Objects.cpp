@@ -39,6 +39,10 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <cerrno>
+#include <cstring>
+#include <limits>
+#include <stdexcept>
 
 struct FcLangSet {
     std::array<bool, std::size(fontconfig_data::Languages)> known{};
@@ -47,6 +51,29 @@ struct FcLangSet {
 };
 
 namespace {
+
+[[noreturn]] void InputFault(const char* caller) {
+    throw std::runtime_error(std::string(caller) + ": invalid guest input");
+}
+
+std::string ReadGuestText(const char* source, const char* caller) {
+    if (!source) InputFault(caller);
+    std::string text;
+    auto address = reinterpret_cast<std::uintptr_t>(source);
+    std::array<char, 256> bytes{};
+    for (;;) {
+        const auto count = bytes.size() - address % bytes.size();
+        const int savedErrno = errno;
+        const bool readable = GuestCopyIn_nid_no_patch(bytes.data(), reinterpret_cast<const void*>(address), count);
+        errno = savedErrno;
+        if (!readable) InputFault(caller);
+        const auto* end = static_cast<const char*>(std::memchr(bytes.data(), 0, count));
+        text.append(bytes.data(), end ? static_cast<std::size_t>(end - bytes.data()) : count);
+        if (end) return text;
+        if (address > std::numeric_limits<std::uintptr_t>::max() - count) InputFault(caller);
+        address += count;
+    }
+}
 
 unsigned char Lower(unsigned char value) {
     return value >= 'A' && value <= 'Z' ? value + ('a' - 'A') : value;
@@ -192,7 +219,7 @@ void ReadGuestValue(T& destination, const T* source, const char* caller) {
     const int savedErrno = errno;
     const bool ok = GuestCopyIn_nid_no_patch(&destination, source, sizeof(destination));
     errno = savedErrno;
-    if (!ok) NotImplemented_nid_no_patch(caller);
+    if (!ok) InputFault(caller);
 }
 
 template <typename T>
@@ -258,15 +285,16 @@ struct FcPattern {
 namespace {
 
 FcBool AddValue(FcPattern* pattern, const char* object, PatternValue value) {
-    if (!pattern || !object) NotImplemented_nid_no_patch(__func__);
-    if (!ValidType(object, value.type)) return 0;
-    const auto found = pattern->objects.find(object);
+    if (!pattern || !object) InputFault(__func__);
+    const auto name = ReadGuestText(object, __func__);
+    if (!ValidType(name, value.type)) return 0;
+    const auto found = pattern->objects.find(name);
     if (found != pattern->objects.end()) {
         found->second.push_back(std::move(value));
     } else {
         std::list<PatternValue> values;
         values.push_back(std::move(value));
-        pattern->objects.emplace(object, std::move(values));
+        pattern->objects.emplace(name, std::move(values));
     }
     return 1;
 }
@@ -284,15 +312,15 @@ void APS5_VABI FcLangSetDestroy(FcLangSet* set) {
 }
 
 FcBool APS5_VABI FcLangSetAdd(FcLangSet* set, const FcChar8* language) {
-    if (!set || !language) NotImplemented_nid_no_patch(__func__);
-    const std::string_view name(reinterpret_cast<const char*>(language));
-    const auto entry = std::lower_bound(std::begin(fontconfig_data::Languages), std::end(fontconfig_data::Languages), name,
-        [](auto known, auto candidate) { return CompareLanguageIndex(known, candidate) < 0; });
-    if (entry != std::end(fontconfig_data::Languages) && CompareLanguageIndex(*entry, name) == 0) {
-        set->known[entry - std::begin(fontconfig_data::Languages)] = true;
-        return 1;
-    }
+    if (!set || !language) InputFault(__func__);
     try {
+        const auto name = ReadGuestText(reinterpret_cast<const char*>(language), __func__);
+        const auto known = std::lower_bound(std::begin(fontconfig_data::Languages), std::end(fontconfig_data::Languages), name,
+            [](auto known, std::string_view candidate) { return CompareLanguageIndex(known, candidate) < 0; });
+        if (known != std::end(fontconfig_data::Languages) && CompareLanguageIndex(*known, name) == 0) {
+            set->known[known - std::begin(fontconfig_data::Languages)] = true;
+            return 1;
+        }
         const auto [entry, inserted] = set->extra.emplace(name);
         if (inserted) {
             try {
@@ -309,10 +337,10 @@ FcBool APS5_VABI FcLangSetAdd(FcLangSet* set, const FcChar8* language) {
 }
 
 FcLangResult APS5_VABI FcLangSetHasLang(const FcLangSet* set, const FcChar8* language) {
-    if (!set || !language) NotImplemented_nid_no_patch(__func__);
-    const std::string_view name(reinterpret_cast<const char*>(language));
+    if (!set || !language) InputFault(__func__);
+    const auto name = ReadGuestText(reinterpret_cast<const char*>(language), __func__);
     const auto entry = std::lower_bound(std::begin(fontconfig_data::Languages), std::end(fontconfig_data::Languages), name,
-        [](auto known, auto candidate) { return CompareLanguageIndex(known, candidate) < 0; });
+        [](auto known, std::string_view candidate) { return CompareLanguageIndex(known, candidate) < 0; });
     const auto index = static_cast<int>(entry - std::begin(fontconfig_data::Languages));
     if (entry != std::end(fontconfig_data::Languages) && CompareLanguageIndex(*entry, name) == 0 && set->known[index])
         return FcLangEqual;
@@ -340,7 +368,7 @@ void APS5_VABI FcPatternDestroy_nid_postfix(FcPattern* pattern) {
 }
 
 void APS5_VABI FcPatternReference(FcPattern* pattern) {
-    if (!pattern) NotImplemented_nid_no_patch(__func__);
+    if (!pattern) InputFault(__func__);
     pattern->references.fetch_add(1, std::memory_order_relaxed);
 }
 
@@ -470,18 +498,18 @@ FcBool APS5_VABI FcPatternAddDouble(FcPattern* pattern, const char* object, doub
 }
 
 FcBool APS5_VABI FcPatternAddString(FcPattern* pattern, const char* object, const FcChar8* value) {
-    if (!pattern || !object) NotImplemented_nid_no_patch(__func__);
+    if (!pattern || !object) InputFault(__func__);
     if (!value) return 0;
     try {
         PatternValue entry;
         entry.type = FcTypeString;
-        entry.text = reinterpret_cast<const char*>(value);
+        entry.text = ReadGuestText(reinterpret_cast<const char*>(value), __func__);
         return AddValue(pattern, object, std::move(entry));
     } catch (const std::bad_alloc&) { return 0; }
 }
 
 FcBool APS5_VABI FcPatternAddCharSet(FcPattern* pattern, const char* object, const FcCharSet* value) {
-    if (!pattern || !object) NotImplemented_nid_no_patch(__func__);
+    if (!pattern || !object) InputFault(__func__);
     if (!value) return 0;
     try {
         PatternValue entry;
@@ -492,7 +520,7 @@ FcBool APS5_VABI FcPatternAddCharSet(FcPattern* pattern, const char* object, con
 }
 
 FcBool APS5_VABI FcPatternAddLangSet(FcPattern* pattern, const char* object, const FcLangSet* value) {
-    if (!pattern || !object) NotImplemented_nid_no_patch(__func__);
+    if (!pattern || !object) InputFault(__func__);
     if (!value) return 0;
     try {
         PatternValue entry;
@@ -503,7 +531,7 @@ FcBool APS5_VABI FcPatternAddLangSet(FcPattern* pattern, const char* object, con
 }
 
 FcBool APS5_VABI FcPatternAddMatrix(FcPattern* pattern, const char* object, const FcMatrix* value) {
-    if (!pattern || !object) NotImplemented_nid_no_patch(__func__);
+    if (!pattern || !object) InputFault(__func__);
     if (!value) return 0;
     try {
         PatternValue entry;

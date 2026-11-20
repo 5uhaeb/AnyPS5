@@ -1,0 +1,5 @@
+# libfontconfig
+
+## change [Faulting arguments]
+
+- [Faulting arguments](../../../core/libs/prx/libfontconfig/Objects.cpp) are not delivered as native console signals. `FcLangSetAdd`, `FcLangSetHasLang`, the seven typed `FcPatternAdd*` exports and `FcPatternReference` report undefined null arguments and unreadable string or matrix inputs as host runtime errors. These checks follow the dereferences in pinned Fontconfig 2.15.0 [fclang.c](https://github.com/fontconfig/fontconfig/blob/72b9a48f57de6204d99ce1c217b5609ee92ece9b/src/fclang.c) and [fcpat.c](https://github.com/fontconfig/fontconfig/blob/72b9a48f57de6204d99ce1c217b5609ee92ece9b/src/fcpat.c); the firmware 13.42 review cited above also reports `FcPatternReference` dereferencing its argument at `0x9f0`. Names and string values are copied without a fixed length cap. Other unsupported paths retain `NotImplemented_nid_no_patch`. `FcPatternDestroy(nullptr)` still does nothing where that firmware dereferences its argument at `0x7e0`. Foreign, stale and unreadable opaque handles remain unsupported, and native console fault behavior and allocation failures are unverified.
