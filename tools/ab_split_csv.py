@@ -29,15 +29,21 @@ def main(argv=None):
             stream.reconfigure(encoding="utf-8", errors="backslashreplace", newline="")
     parser = argparse.ArgumentParser(description="Export the existing in-run A/B comparison as CSV")
     parser.add_argument("log", type=Path)
+    parser.add_argument("-o", "--output", type=Path,
+                        help="write UTF-8 CSV with a BOM to a new file instead of stdout; existing files are refused")
     parser.add_argument("--program", action="append", type=ab_split.program_key, default=[])
     parser.add_argument("--class", dest="classes", action="append", default=[])
     args = parser.parse_args(argv)
     try:
         with args.log.open(encoding="utf-8-sig", errors="replace") as lines:
             text = render(ab_split.split(lines, args.program, args.classes))
+        if args.output is not None:
+            with args.output.open("x", encoding="utf-8-sig", newline="") as output:
+                output.write(text)
     except (OSError, ValueError, OverflowError) as error:
         parser.error(str(error))
-    sys.stdout.write(text)
+    if args.output is None:
+        sys.stdout.write(text)
     return 0
 
 

@@ -83,6 +83,55 @@ class AbCsvTests(unittest.TestCase):
         text = ab_split_csv.render({"config": "c", "phases": [], "metrics": []})
         self.assertEqual(text, ",".join(ab_split_csv.COLUMNS) + "\r\n")
 
+    def test_output_file_preserves_unicode_filters_and_csv_newlines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "capture.txt"
+            output = Path(directory) / "results \u65e5\u672c.csv"
+            lines = [line.replace("[ab] in-run A/B:", "[ab] in-run A/B: caf\u00e9 \u65e5\u672c,") for line in log()]
+            source.write_text("".join(lines), encoding="utf-8")
+            completed = subprocess.run([sys.executable, ab_split_csv.__file__, str(source),
+                                        "--output", str(output), "--program", "0x1000", "--class", "staging-in"],
+                                       capture_output=True)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout, b"")
+            expected = ab_split_csv.render(ab_split.split(lines, ["0x1000"], ["staging-in"]))
+            self.assertEqual(output.read_bytes(), expected.encode("utf-8-sig"))
+            with output.open(encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertIn("caf\u00e9 \u65e5\u672c,", rows[0]["config"])
+
+    def test_output_errors_do_not_overwrite_existing_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "capture.txt"
+            original = "".join(log()).encode("utf-8")
+            source.write_bytes(original)
+            existing = Path(directory) / "results.csv"
+            existing.write_bytes(b"previous results")
+            for output in (source, existing, Path(directory), Path(directory) / "missing" / "results.csv"):
+                with self.subTest(output=output):
+                    completed = subprocess.run([sys.executable, ab_split_csv.__file__, str(source), "-o", str(output)],
+                                               capture_output=True)
+                    self.assertEqual(completed.returncode, 2, completed.stderr)
+                    self.assertEqual(completed.stdout, b"")
+                    self.assertIn(b"error:", completed.stderr)
+                    self.assertNotIn(b"unrecognized arguments", completed.stderr)
+                    self.assertNotIn(b"Traceback", completed.stderr)
+                    self.assertEqual(source.read_bytes(), original)
+                    self.assertEqual(existing.read_bytes(), b"previous results")
+
+    def test_invalid_log_does_not_create_output_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "capture.txt"
+            output = Path(directory) / "results.csv"
+            source.write_text("no phases\n", encoding="utf-8")
+            completed = subprocess.run([sys.executable, ab_split_csv.__file__, str(source), "--output", str(output)],
+                                       capture_output=True)
+            self.assertEqual(completed.returncode, 2, completed.stderr)
+            self.assertEqual(completed.stdout, b"")
+            self.assertNotIn(b"Traceback", completed.stderr)
+            self.assertFalse(output.exists())
+            self.assertNotIn(b"unrecognized arguments", completed.stderr)
+
     def test_render_keeps_full_noise_and_blank_missing_values(self):
         metric = {"metric": "m", "a": 1.5, "b": None, "change": None, "change_pct": None,
                   "noise": {"mean": 0.5, "se": 0.25, "sd": 0.75, "n": 4}}
